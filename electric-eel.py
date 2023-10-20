@@ -245,9 +245,53 @@ def save_s3_bucket(file_name: str, exposure_bucket_collections: list) -> None:
         raise io_error
 
 
+def get_security_group_detections(instances: list):
+    security_groups = list()
+    for i in instances:
+        detect(f"[+] Found InstanceId {i['InstanceId']}")
+        if len(i["SecurityGroups"]) > 0:
+            for group in i["SecurityGroups"]:
+                detection = {"instance_id": i["InstanceId"], "security_groups": group}
+                security_groups.append(detection)
+    return security_groups
+
+
+def get_external_resources() -> list:
+    ec2 = boto3.client('ec2')
+    response = ec2.describe_instances()
+    reservations = response["Reservations"]
+    info(f"[+] Found {len(reservations)} Reservations")
+    detections_with_ranges = list()
+    for r in reservations:
+        instances = r["Instances"]
+        detections = get_security_group_detections(instances)
+        for detection in detections:
+            detection["ip_permissions"] = list()
+            group_identifier = detection["security_groups"]["GroupId"]
+            info(f"[+] Starting search for {group_identifier}")
+            details = ec2.describe_security_groups(GroupIds=[group_identifier])
+            security_groups = details["SecurityGroups"]
+            ip_permissions = {"ranges": list()}
+            for group in security_groups:
+                for permission in group["IpPermissions"]:
+                    if len(permission["IpRanges"]) > 0:
+                        for ip_range in permission["IpRanges"]:
+                            if ip_range["CidrIp"] == "0.0.0.0/0":
+                                detect(f"[+] Found 0.0.0.0/0 range for port {permission['FromPort']} "
+                                       f"=> port {permission['ToPort']}")
+                                ip_permissions["from_port"] = permission["FromPort"]
+                                ip_permissions["to_port"] = permission["ToPort"]
+                                ip_permissions["ranges"].append(ip_range)
+            if len(ip_permissions["ranges"]) > 0:
+                detection["ip_permissions"].append(ip_permissions)
+                detections_with_ranges.append(detection)
+    return detections_with_ranges
+
+
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument("--s3-buckets", action="store_true")
 PARSER.add_argument("--cloudfront", action="store_true")
+PARSER.add_argument("--external-resources", action="store_true")
 PARSER.add_argument("--output")
 PARSER.add_argument("--input-file")
 
@@ -264,5 +308,14 @@ if __name__ == "__main__":
             misconfigured_domains: list = get_cloudfront_misconfigurations(args.input_file)
             for item in misconfigured_domains:
                 warn(f"[!] Potentially misconfigured domain {item}")
+        if args.external_resources:
+            external_resources = get_external_resources()
+            # TODO ~ Turn into a function
+            if args.output:
+                try:
+                    with open(args.output) as fp:
+                        fp.write(json.dumps(external_resources, indent=2))
+                except IOError as io_error:
+                    raise  io_error
     except KeyboardInterrupt:
         sys.exit(0)
