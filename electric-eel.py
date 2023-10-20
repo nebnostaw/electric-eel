@@ -15,6 +15,18 @@ from termcolor import colored
 logging.basicConfig(format="%(process)d - %(levelname)s - %(message)s", level=logging.INFO)
 
 
+def banner():
+    print("""
+ _______  ___      _______  _______  _______  ______    ___   _______    _______  _______  ___     
+|       ||   |    |       ||       ||       ||    _ |  |   | |       |  |       ||       ||   |    
+|    ___||   |    |    ___||       ||_     _||   | ||  |   | |       |  |    ___||    ___||   |    
+|   |___ |   |    |   |___ |       |  |   |  |   |_||_ |   | |       |  |   |___ |   |___ |   |    
+|    ___||   |___ |    ___||      _|  |   |  |    __  ||   | |      _|  |    ___||    ___||   |___ 
+|   |___ |       ||   |___ |     |_   |   |  |   |  | ||   | |     |_   |   |___ |   |___ |       |
+|_______||_______||_______||_______|  |___|  |___|  |_||___| |_______|  |_______||_______||_______|
+    """)
+
+
 def info(message: str) -> None:
     """
     Log information
@@ -305,6 +317,7 @@ PARSER.add_argument("--output")
 PARSER.add_argument("--input-file")
 
 if __name__ == "__main__":
+    banner()
     try:
         args = PARSER.parse_args()
         if args.s3_buckets:
@@ -325,6 +338,6 @@ if __name__ == "__main__":
                     with open(args.output) as fp:
                         fp.write(json.dumps(external_resources, indent=2))
                 except IOError as io_error:
-                    raise  io_error
+                    raise io_error
     except KeyboardInterrupt:
         sys.exit(0)
