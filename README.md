@@ -5,7 +5,7 @@ First you will need to configure your AWS credentials.
 
 [https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html)
 
-## Check for CloudFront Misconfigurations
+### Check for CloudFront Misconfigurations
 ```
 python3 electric-eel.py --cloud-front
 ```
