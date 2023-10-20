@@ -245,7 +245,12 @@ def save_s3_bucket(file_name: str, exposure_bucket_collections: list) -> None:
         raise io_error
 
 
-def get_security_group_detections(instances: list):
+def get_security_group_detections(instances: list) -> list:
+    """
+    Get the security groups for a list of EC2 instances
+    :param instances: The EC2 instances
+    :return: The security groups
+    """
     security_groups = list()
     for i in instances:
         detect(f"[+] Found InstanceId {i['InstanceId']}")
@@ -257,6 +262,10 @@ def get_security_group_detections(instances: list):
 
 
 def get_external_resources() -> list:
+    """
+    Get all external EC2 resources
+    :return: A list of external EC2 resources
+    """
     ec2 = boto3.client('ec2')
     response = ec2.describe_instances()
     reservations = response["Reservations"]
