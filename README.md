@@ -30,3 +30,7 @@ Determine if the S3 buckets in your AWS environment have public access.
 ```
 python3 electric-eel.py --s3-buckets
 ```
+Save the results to a file.
+```
+python3 electric-eel.py --s3-buckets --output results.json
+```
