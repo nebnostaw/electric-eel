@@ -179,11 +179,11 @@ def get_cloudfront_ranges() -> list:
     url = "https://ip-ranges.amazonaws.com/ip-ranges.json"
     response = requests.get(url)
     data: dict = response.json()
-    for item in data["prefixes"]:
-        service: str = item.get("service")
+    for prefix in data["prefixes"]:
+        service: str = prefix.get("service")
         if service == "CLOUDFRONT":
-            detect(f"[+] Found CloudFront service {service} = {item.get('ip_prefix')}")
-            ranges.append(item.get("ip_prefix"))
+            detect(f"[+] Found CloudFront service {service} = {prefix.get('ip_prefix')}")
+            ranges.append(prefix.get("ip_prefix"))
     return ranges
 
 
@@ -237,8 +237,8 @@ def get_domains_from_input(input_file: str) -> list:
     if os.path.isfile(input_file):
         try:
             with open(input_file, "r") as fp:
-                for i in fp.readlines():
-                    domains.append(i.strip())
+                for line in fp.readlines():
+                    domains.append(line.strip())
         except IOError as io_error:
             raise io_error
     else:
@@ -285,12 +285,11 @@ def get_security_group_detections(instances: list) -> list:
     :return: The security groups
     """
     security_groups = list()
-    for i in instances:
-        print(i)
-        detect(f"[+] Found InstanceId {i['InstanceId']}")
-        if len(i["SecurityGroups"]) > 0:
-            for group in i["SecurityGroups"]:
-                detection = {"instance_id": i["InstanceId"], "security_groups": group}
+    for instance in instances:
+        detect(f"[+] Found InstanceId {instance['InstanceId']}")
+        if len(instance["SecurityGroups"]) > 0:
+            for group in instance["SecurityGroups"]:
+                detection = {"instance_id": instance["InstanceId"], "security_groups": group}
                 security_groups.append(detection)
     return security_groups
 
@@ -373,6 +372,7 @@ if __name__ == "__main__":
         if args.external_ec2_resources:
             external_resources = get_ec2_external_cidr()
             # TODO ~ Turn into a function
+            # Save external ec2 resources
             if args.output:
                 try:
                     with open(args.output, "w") as fp:
@@ -383,6 +383,7 @@ if __name__ == "__main__":
             addresses = get_ec2_public_addresses()
             for i in addresses:
                 detect(f"[+] {i}")
+            # Save public IP addresses
             if args.output:
                 try:
                     with open(args.output, "w") as fp:
