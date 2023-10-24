@@ -89,6 +89,17 @@ def populate_access_block(block, bucket_collection: dict) -> None:
         bucket_collection["access_block"] = False
 
 
+def get_s3_bucket_policy(s3, bucket_name: str) -> str:
+    """
+    Get and return the policy for the S3 bucket
+    :param s3: The s3 client object
+    :param bucket_name: The bucket name
+    :return: The policy
+    """
+    result = s3.get_bucket_policy(Bucket=bucket_name)
+    return result["Policy"]
+
+
 def get_s3_bucket_exposure(bucket_collections: list) -> None:
     """
     Determine the exposure of all the S3 buckets that can be discovered in the environment.
@@ -99,14 +110,24 @@ def get_s3_bucket_exposure(bucket_collections: list) -> None:
         info(f"[+] Querying {bucket['Name']} ...")
         try:
             bucket_collection["bucket_name"] = bucket["Name"]
+            result = get_s3_bucket_policy(s3, bucket["Name"])
+            if result:
+                bucket_policies = list()
+                statements = json.loads(result)["Statement"]
+                if len(statements) > 0:
+                    detect(f"[+] Found {len(statements)} bucket policies")
+                    for s in statements:
+                        bucket_policies.append(s)
+                bucket_collection["bucket_policies"] = bucket_policies
             response: dict = get_bucket_cors(s3, bucket["Name"])
             rules: list = response["CORSRules"]
             bucket_collection["cors_rules"] = list()
             if len(rules) > 0:
                 # If we have a list of rules set cors_policy to True
                 bucket_collection["cors_policy"] = True
-                for i in rules:
-                    bucket_collection["cors_rules"].append(i)
+                detect(f"[+] Found CORS rules {len(rules)}")
+                for rule in rules:
+                    bucket_collection["cors_rules"].append(rule)
             else:
                 # if we don't have any rules set cors_policy to False
                 bucket_collection["cors_policy"] = False
@@ -194,12 +215,12 @@ def analyze_cloudfront_domains(domains: list) -> list:
     :param domains: The domains
     """
     potentially_misconfigured_domains = list()
-    for i in domains:
+    for domain in domains:
         try:
-            response = requests.get("".join(["http://", i]))
-            info(f"[+] Analyzing {i} for misconfigurations ... [{response.status_code}]")
+            response = requests.get("".join(["http://", domain]))
+            info(f"[+] Analyzing {domain} for misconfigurations ... [{response.status_code}]")
             if response.status_code == 403:
-                potentially_misconfigured_domains.append(i)
+                potentially_misconfigured_domains.append(domain)
         except requests.RequestException:
             # TODO ~ Handle this when it comes up
             pass
@@ -265,6 +286,7 @@ def get_security_group_detections(instances: list) -> list:
     """
     security_groups = list()
     for i in instances:
+        print(i)
         detect(f"[+] Found InstanceId {i['InstanceId']}")
         if len(i["SecurityGroups"]) > 0:
             for group in i["SecurityGroups"]:
@@ -273,9 +295,9 @@ def get_security_group_detections(instances: list) -> list:
     return security_groups
 
 
-def get_external_resources() -> list:
+def get_ec2_external_cidr() -> list:
     """
-    Get all external EC2 resources
+    Get all external EC2 resources with an 0.0.0.0/0 CIDR block
     :return: A list of external EC2 resources
     """
     ec2 = boto3.client('ec2')
@@ -309,10 +331,28 @@ def get_external_resources() -> list:
     return detections_with_ranges
 
 
+def get_ec2_public_addresses() -> list:
+    """
+    Get a list of public IP addresses for all ec2 instances.
+    :return: The list of IP addresses
+    """
+    public_ip_addresses = list()
+    ec2 = boto3.client('ec2')
+    response = ec2.describe_instances()
+    reservations = response["Reservations"]
+    for r in reservations:
+        instances = r["Instances"]
+        for instance in instances:
+            if "PublicIpAddress" in instance:
+                public_ip_addresses.append(instance["PublicIpAddress"])
+    return list(set(public_ip_addresses))
+
+
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument("--s3-buckets", action="store_true")
 PARSER.add_argument("--cloudfront", action="store_true")
-PARSER.add_argument("--external-resources", action="store_true")
+PARSER.add_argument("--external-ec2-resources", action="store_true")
+PARSER.add_argument("--ec2-public-ip-addresses", action="store_true")
 PARSER.add_argument("--output")
 PARSER.add_argument("--input-file")
 
@@ -330,13 +370,25 @@ if __name__ == "__main__":
             misconfigured_domains: list = get_cloudfront_misconfigurations(args.input_file)
             for item in misconfigured_domains:
                 warn(f"[!] Potentially misconfigured domain {item}")
-        if args.external_resources:
-            external_resources = get_external_resources()
+        if args.external_ec2_resources:
+            external_resources = get_ec2_external_cidr()
             # TODO ~ Turn into a function
             if args.output:
                 try:
-                    with open(args.output) as fp:
+                    with open(args.output, "w") as fp:
                         fp.write(json.dumps(external_resources, indent=2))
+                except IOError as io_error:
+                    raise io_error
+        if args.ec2_public_ip_addresses:
+            addresses = get_ec2_public_addresses()
+            for i in addresses:
+                detect(f"[+] {i}")
+            if args.output:
+                try:
+                    with open(args.output, "w") as fp:
+                        for i in addresses:
+                            fp.write(i)
+                            fp.write("\n")
                 except IOError as io_error:
                     raise io_error
     except KeyboardInterrupt:
