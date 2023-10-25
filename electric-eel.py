@@ -265,15 +265,15 @@ def get_cloudfront_misconfigurations(input_file=None) -> list:
     return analyze_cloudfront_domains(cloudfront_domains)
 
 
-def save_s3_bucket(file_name: str, exposure_bucket_collections: list) -> None:
+def save_collection_to_disk(file_name: str, collection: Any) -> None:
     """
-    Save the collection of discovered S3 buckets
+    Save a collection to disk
     :param file_name: The output file name
-    :param exposure_bucket_collections: The exposure bucket collections
+    :param collection: The collection
     """
     try:
         with open(file_name, "w") as fp:
-            fp.write(json.dumps(exposure_bucket_collections, indent=2))
+            fp.write(json.dumps(collection, indent=2))
     except IOError as io_error:
         raise io_error
 
@@ -347,6 +347,16 @@ def get_ec2_public_addresses() -> list:
     return list(set(public_ip_addresses))
 
 
+def save_list_to_disk(file_name: str, data: list) -> None:
+    try:
+        with open(file_name, "w") as fp:
+            for item in data:
+                fp.write(item)
+                fp.write("\n")
+    except IOError as io_error:
+        raise io_error
+
+
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument("--s3-buckets", action="store_true")
 PARSER.add_argument("--cloudfront", action="store_true")
@@ -364,7 +374,7 @@ if __name__ == "__main__":
             get_s3_bucket_exposure(exposure_bucket_collections)
             if args.output:
                 # Save the s3 output
-                save_s3_bucket(args.output, exposure_bucket_collections)
+                save_collection_to_disk(args.output, exposure_bucket_collections)
         if args.cloudfront:
             misconfigured_domains: list = get_cloudfront_misconfigurations(args.input_file)
             for item in misconfigured_domains:
@@ -374,23 +384,13 @@ if __name__ == "__main__":
             # TODO ~ Turn into a function
             # Save external ec2 resources
             if args.output:
-                try:
-                    with open(args.output, "w") as fp:
-                        fp.write(json.dumps(external_resources, indent=2))
-                except IOError as io_error:
-                    raise io_error
+                save_collection_to_disk(args.output, external_resources)
         if args.ec2_public_ip_addresses:
             addresses = get_ec2_public_addresses()
             for i in addresses:
                 detect(f"[+] {i}")
             # Save public IP addresses
             if args.output:
-                try:
-                    with open(args.output, "w") as fp:
-                        for i in addresses:
-                            fp.write(i)
-                            fp.write("\n")
-                except IOError as io_error:
-                    raise io_error
+                save_list_to_disk(args.output, addresses)
     except KeyboardInterrupt:
         sys.exit(0)
